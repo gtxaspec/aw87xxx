@@ -26,6 +26,7 @@
 #include <linux/firmware.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/uaccess.h>
@@ -65,6 +66,7 @@ static LIST_HEAD(g_aw87xxx_list);
 static DEFINE_MUTEX(g_aw87xxx_mutex_lock);
 unsigned int g_aw87xxx_dev_cnt = 0;
 
+#if IS_ENABLED(CONFIG_SND_SOC)
 #ifdef AW_KERNEL_VER_OVER_4_19_1
 static struct aw_componet_codec_ops aw_componet_codec_ops = {
 	.add_codec_controls = snd_soc_add_component_controls,
@@ -76,6 +78,7 @@ static struct aw_componet_codec_ops aw_componet_codec_ops = {
 	.unregister_codec = snd_soc_unregister_codec,
 };
 #endif
+#endif /* CONFIG_SND_SOC */
 
 
 /************************************************************************
@@ -393,6 +396,7 @@ int aw87xxx_esd_update_profile(struct aw87xxx *aw87xxx, char *profile)
  * aw87xxx Kcontrols
  *
  ****************************************************************************/
+#if IS_ENABLED(CONFIG_SND_SOC)
 static int aw87xxx_profile_switch_info(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_info *uinfo)
 {
@@ -627,6 +631,16 @@ int aw87xxx_add_codec_controls(void *codec)
 	return 0;
 }
 EXPORT_SYMBOL(aw87xxx_add_codec_controls);
+#else /* !CONFIG_SND_SOC */
+/* No ASoC core in this kernel (e.g. Ingenic T40 camera): profile/scene
+ * control is exposed via sysfs instead. Keep the symbol exported as a
+ * no-op so any external ASoC machine driver still links. */
+int aw87xxx_add_codec_controls(void *codec)
+{
+	return -ENODEV;
+}
+EXPORT_SYMBOL(aw87xxx_add_codec_controls);
+#endif /* CONFIG_SND_SOC */
 
 
 /****************************************************************************

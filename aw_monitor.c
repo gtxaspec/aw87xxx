@@ -400,6 +400,7 @@ static int aw_monitor_get_battery_capacity(struct device *dev,
 				struct aw_monitor *monitor,
 				uint32_t *vbat_capacity)
 {
+#if IS_ENABLED(CONFIG_POWER_SUPPLY)
 	char name[] = "battery";
 	int ret = -1;
 	union power_supply_propval prop = { 0 };
@@ -421,6 +422,15 @@ static int aw_monitor_get_battery_capacity(struct device *dev,
 		*vbat_capacity);
 
 	return 0;
+#else
+	/* No power-supply subsystem (e.g. mains/USB-powered camera with no
+	 * battery): vbat-based vmax scaling is unavailable. Callers treat a
+	 * negative return as "skip" and fall back to the bin's default vmax. */
+	(void)monitor;
+	(void)vbat_capacity;
+	AW_DEV_LOGD(dev, "CONFIG_POWER_SUPPLY disabled, vbat monitor unavailable");
+	return -EOPNOTSUPP;
+#endif /* CONFIG_POWER_SUPPLY */
 }
 
 static int aw_search_vmax_from_table(struct device *dev,
