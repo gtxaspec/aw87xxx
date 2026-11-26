@@ -22,6 +22,10 @@ portable to systems that have none of that.
 | `aw_dsp.h` | disable `AW_QCOM_OPEN_DSP_PLATFORM` | build in no-DSP mode (register/scene config only) where there is no ADSP |
 | `aw87xxx.c`, `aw_monitor.c` | gate ASoC and power-supply code behind `IS_ENABLED(CONFIG_SND_SOC)` / `IS_ENABLED(CONFIG_POWER_SUPPLY)` | so the driver builds where those subsystems are absent; control is via **sysfs**, and VBAT/vmax scaling is skipped where there is no battery |
 
+The driver also builds on 7.x (tested against 7.4 and 4.4.94 and 3.10.14 kernel trees): the reset line is a gpio descriptor from
+6.5 on (the `reset-gpio` property is matched by the legacy suffix), the I2C `probe` takes only the client from 6.3 and `remove` returns void from 6.1,
+all behind `LINUX_VERSION_CODE` guards (`aw_compat.h`), so the older kernels keep the unchanged code.
+
 The gating is conditional, so the driver still adapts upward: on a kernel that
 *does* provide ASoC and `POWER_SUPPLY`, the kcontrol and VBAT paths compile back in.
 

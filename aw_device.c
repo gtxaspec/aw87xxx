@@ -14,7 +14,12 @@
 
 #include <linux/i2c.h>
 #include <linux/gpio.h>
+#include "aw_compat.h"
+#ifndef AW_USE_GPIOD
 #include <linux/of_gpio.h>
+#else
+#include <linux/gpio/consumer.h>
+#endif
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <linux/kernel.h>
@@ -228,10 +233,24 @@ static void aw_dev_reg_mute_bits_set(struct aw_device *aw_dev,
  ************************************************************************/
 static bool aw_dev_gpio_is_valid(struct aw_device *aw_dev)
 {
+#ifdef AW_USE_GPIOD
+	if (aw_dev->rst_desc)
+		return true;
+#else
 	if (gpio_is_valid(aw_dev->rst_gpio))
 		return true;
+#endif
 	else
 		return false;
+}
+
+static void aw_dev_gpio_set(struct aw_device *aw_dev, int level)
+{
+#ifdef AW_USE_GPIOD
+	gpiod_set_value_cansleep(aw_dev->rst_desc, level);
+#else
+	gpio_set_value_cansleep(aw_dev->rst_gpio, level);
+#endif
 }
 
 void aw_dev_hw_pwr_ctrl(struct aw_device *aw_dev, bool enable)
@@ -242,9 +261,9 @@ void aw_dev_hw_pwr_ctrl(struct aw_device *aw_dev, bool enable)
 	}
 	if (enable) {
 		if (aw_dev_gpio_is_valid(aw_dev)) {
-			gpio_set_value_cansleep(aw_dev->rst_gpio, AW_GPIO_LOW_LEVEL);
+			aw_dev_gpio_set(aw_dev, AW_GPIO_LOW_LEVEL);
 			mdelay(2);
-			gpio_set_value_cansleep(aw_dev->rst_gpio, AW_GPIO_HIGHT_LEVEL);
+			aw_dev_gpio_set(aw_dev, AW_GPIO_HIGHT_LEVEL);
 			mdelay(2);
 			aw_dev->hwen_status = AW_DEV_HWEN_ON;
 			AW_DEV_LOGI(aw_dev->dev, "hw power on");
@@ -253,7 +272,7 @@ void aw_dev_hw_pwr_ctrl(struct aw_device *aw_dev, bool enable)
 		}
 	} else {
 		if (aw_dev_gpio_is_valid(aw_dev)) {
-			gpio_set_value_cansleep(aw_dev->rst_gpio, AW_GPIO_LOW_LEVEL);
+			aw_dev_gpio_set(aw_dev, AW_GPIO_LOW_LEVEL);
 			mdelay(2);
 			aw_dev->hwen_status = AW_DEV_HWEN_OFF;
 			AW_DEV_LOGI(aw_dev->dev, "hw power off");

@@ -1,6 +1,6 @@
 #ifndef __AW_DEVICE_H__
 #define __AW_DEVICE_H__
-#include <linux/version.h>
+#include "aw_compat.h"
 #include <linux/kernel.h>
 #include <sound/control.h>
 #include <sound/soc.h>
@@ -28,6 +28,7 @@
 #define AW_DEV_REG_INVALID_MASK		(0xff)
 
 #define AW_NO_RESET_GPIO		(-1)
+
 
 #define AW_PID_9B_BIN_REG_CFG_COUNT	(10)
 
@@ -109,6 +110,9 @@ struct aw_device {
 	int hwen_status;
 	int i2c_bus;
 	int rst_gpio;
+#ifdef AW_USE_GPIOD
+	struct gpio_desc *rst_desc;
+#endif
 	int reg_max_addr;
 	int product_cnt;
 	const char **product_tab;

@@ -23,7 +23,10 @@
 #include <linux/hrtimer.h>
 #include <linux/i2c.h>
 #include <linux/gpio.h>
+#include "aw_compat.h"
+#ifndef AW_USE_GPIOD
 #include <linux/of_gpio.h>
+#endif
 #include <linux/interrupt.h>
 #include <linux/irq.h>
 #include <linux/firmware.h>

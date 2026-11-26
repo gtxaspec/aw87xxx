@@ -16,7 +16,12 @@
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include <linux/gpio.h>
+#include "aw_compat.h"
+#ifndef AW_USE_GPIOD
 #include <linux/of_gpio.h>
+#else
+#include <linux/gpio/consumer.h>
+#endif
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <linux/module.h>
@@ -754,7 +759,7 @@ static void aw87xxx_fw_load_work_routine(struct work_struct *work)
 
 	if (prof_info->status == AW_ACF_WAIT) {
 		request_firmware_nowait(THIS_MODULE,
-				FW_ACTION_HOTPLUG,
+				true,
 				aw87xxx->fw_name,
 				aw87xxx->dev,
 				GFP_KERNEL, aw87xxx,
@@ -1232,6 +1237,23 @@ static int aw87xxx_dtsi_parse(struct aw87xxx *aw87xxx,
 	if (ret < 0)
 		return ret;
 
+#ifdef AW_USE_GPIOD
+	/* the "reset-gpio" property is matched by the legacy "-gpio" suffix */
+	aw87xxx->aw_dev.rst_desc = devm_gpiod_get_optional(aw87xxx->dev, "reset", GPIOD_OUT_LOW);
+	if (IS_ERR(aw87xxx->aw_dev.rst_desc)) {
+		AW_DEV_LOGE(aw87xxx->dev, "reset request failed");
+		return PTR_ERR(aw87xxx->aw_dev.rst_desc);
+	}
+	if (!aw87xxx->aw_dev.rst_desc) {
+		AW_DEV_LOGI(aw87xxx->dev, "no reset gpio provided, hardware reset unavailable");
+		aw87xxx->aw_dev.rst_gpio = AW_NO_RESET_GPIO;
+		aw87xxx->aw_dev.hwen_status = AW_DEV_HWEN_INVALID;
+	} else {
+		aw87xxx->aw_dev.rst_gpio = 0;
+		aw87xxx->aw_dev.hwen_status = AW_DEV_HWEN_OFF;
+		AW_DEV_LOGI(aw87xxx->dev, "reset gpio parse succeed");
+	}
+#else
 	ret = of_get_named_gpio(dev_node, "reset-gpio", 0);
 	if (ret < 0) {
 		AW_DEV_LOGI(aw87xxx->dev, "no reset gpio provided, hardware reset unavailable");
@@ -1251,6 +1273,8 @@ static int aw87xxx_dtsi_parse(struct aw87xxx *aw87xxx,
 			}
 		}
 	}
+
+#endif
 
 	return 0;
 }
@@ -1285,8 +1309,12 @@ static struct aw87xxx *aw87xxx_malloc_init(struct i2c_client *client)
 	return aw87xxx;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 3, 0)
+static int aw87xxx_i2c_probe(struct i2c_client *client)
+#else
 static int aw87xxx_i2c_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
+#endif
 {
 	struct device_node *dev_node = client->dev.of_node;
 	struct aw87xxx *aw87xxx = NULL;
@@ -1347,8 +1375,10 @@ static int aw87xxx_i2c_probe(struct i2c_client *client,
 
 exit_device_init_failed:
 	AW_DEV_LOGE(aw87xxx->dev, "pa init failed");
+#ifndef AW_USE_GPIOD
 	if (gpio_is_valid(aw87xxx->aw_dev.rst_gpio))
 		devm_gpio_free(&client->dev, aw87xxx->aw_dev.rst_gpio);
+#endif
 	devm_kfree(&client->dev, aw87xxx);
 	aw87xxx = NULL;
 exit_malloc_init_failed:
@@ -1356,12 +1386,23 @@ exit_check_functionality_failed:
 	return ret;
 }
 
-static int aw87xxx_i2c_remove(struct i2c_client *client)
+/* the i2c remove callback returns void from 6.1 on */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 1, 0)
+#define AW_I2C_REMOVE_TYPE	void
+#define AW_I2C_REMOVE_RET
+#else
+#define AW_I2C_REMOVE_TYPE	int
+#define AW_I2C_REMOVE_RET	0
+#endif
+
+static AW_I2C_REMOVE_TYPE aw87xxx_i2c_remove(struct i2c_client *client)
 {
 	struct aw87xxx *aw87xxx = i2c_get_clientdata(client);
 
+#ifndef AW_USE_GPIOD
 	if (gpio_is_valid(aw87xxx->aw_dev.rst_gpio))
 		devm_gpio_free(&client->dev, aw87xxx->aw_dev.rst_gpio);
+#endif
 
 	aw_monitor_exit(&aw87xxx->monitor);
 
@@ -1380,7 +1421,7 @@ static int aw87xxx_i2c_remove(struct i2c_client *client)
 		aw87xxx = NULL;
 	}
 
-	return 0;
+	return AW_I2C_REMOVE_RET;
 }
 
 static void aw87xxx_i2c_shutdown(struct i2c_client *client)

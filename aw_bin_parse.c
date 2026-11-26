@@ -12,7 +12,10 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/i2c.h>
+#include "aw_compat.h"
+#ifndef AW_USE_GPIOD
 #include <linux/of_gpio.h>
+#endif
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/firmware.h>
